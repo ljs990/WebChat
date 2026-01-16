@@ -1,288 +1,183 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<title>WebChat</title>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta charset="utf-8" />
+  <title>WebChat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
-<style>
-body {
-  margin:0;
-  background:#000;
-  color:#fff;
-  font-family:-apple-system, BlinkMacSystemFont;
-}
-header {
-  text-align:center;
-  padding:12px 0 4px;
-  font-size:20px;
-  font-weight:600;
-}
-#count {
-  text-align:center;
-  color:#888;
-  font-size:13px;
-}
-#messages {
-  padding:10px;
-  padding-bottom:90px;
-}
-.msg {
-  max-width:70%;
-  padding:10px 14px;
-  border-radius:18px;
-  margin:6px 0;
-  word-break:break-word;
-}
-.me { margin-left:auto; background:#0A84FF; }
-.you { background:#2C2C2E; }
-#typing {
-  color:#888;
-  font-size:13px;
-  padding:0 14px;
-}
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, system-ui;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
 
-/* footer */
-footer {
-  position:fixed;
-  bottom:env(safe-area-inset-bottom);
-  left:0;
-  width:100%;
-  display:flex;
-  gap:8px;
-  padding:10px;
-  background:#000;
-  box-sizing:border-box;
-}
-#input {
-  flex:1;
-  height:44px;
-  border:none;
-  border-radius:22px;
-  padding:0 14px;
-  font-size:16px;
-  outline:none;
-}
-#sendBtn {
-  height:44px;
-  min-width:64px;
-  border:none;
-  border-radius:22px;
-  background:#4f46e5;
-  color:#fff;
-  font-size:15px;
-}
+    header {
+      padding: 12px;
+      text-align: center;
+      font-size: 20px;
+      font-weight: 600;
+      border-bottom: 1px solid #222;
+    }
 
-/* password overlay */
-.overlay {
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.85);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:9999;
-}
-.hidden { display:none; }
-.password-box {
-  width:90%;
-  max-width:320px;
-  background:#111;
-  border-radius:16px;
-  padding:20px;
-  text-align:center;
-}
-.password-box h2 { margin-bottom:12px; font-size:18px; }
-#pwInput {
-  width:100%;
-  height:44px;
-  border-radius:22px;
-  padding:0 14px;
-  font-size:16px;
-  margin-bottom:12px;
-}
-#pwBtn {
-  width:100%;
-  height:44px;
-  border-radius:22px;
-  background:#1ed760;
-  color:#000;
-  font-weight:bold;
-}
-#pwError {
-  margin-top:10px;
-  color:#ff5c5c;
-  font-size:14px;
-}
-</style>
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .msg {
+      max-width: 75%;
+      padding: 8px 12px;
+      border-radius: 12px;
+      word-break: break-word;
+      font-size: 15px;
+    }
+
+    .me {
+      align-self: flex-end;
+      background: #0a84ff;
+    }
+
+    .you {
+      align-self: flex-start;
+      background: #2c2c2e;
+    }
+
+    footer {
+      display: flex;
+      gap: 6px;
+      padding: 10px;
+      border-top: 1px solid #222;
+      background: #000;
+    }
+
+    input {
+      flex: 1;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      font-size: 16px;
+      outline: none;
+    }
+
+    button {
+      padding: 0 16px;
+      border-radius: 10px;
+      border: none;
+      font-size: 15px;
+      background: #0a84ff;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    #lock {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+    }
+  </style>
 </head>
-
 <body>
 
-<!-- 암호 입력 UI -->
-<div id="pwOverlay" class="overlay hidden">
-  <div class="password-box">
-    <h2>🔒 암호가 필요한 방</h2>
-    <input id="pwInput" type="password" placeholder="암호 입력">
-    <button id="pwBtn">입장</button>
-    <div id="pwError"></div>
-  </div>
+<header>WebChat</header>
+
+<div id="lock">
+  <div>🔒 암호 입력</div>
+  <input id="pwInput" placeholder="비밀번호" />
+  <button onclick="unlock()">입장</button>
 </div>
 
-<header>WebChat</header>
-<div id="count"></div>
 <div id="messages"></div>
-<div id="typing"></div>
 
 <footer>
-  <input id="input" placeholder="Message">
+  <input id="input" placeholder="메시지 입력" />
   <button id="sendBtn">보내기</button>
 </footer>
 
-<!-- Firebase SDK (compat) -->
+<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script>
-/* Firebase */
-firebase.initializeApp({
-  apiKey: "AIzaSyBONHZ5CmDrvoQ4q8sx_f5g0EiEJGJw_1s",
-  authDomain: "webchat-841e0.firebaseapp.com",
-  projectId: "webchat-841e0",
-  storageBucket: "webchat-841e0.firebasestorage.app",
-  messagingSenderId: "772656579197",
-  appId: "1:772656579197:web:92055fafce079bd6cc6714"
-});
-const auth = firebase.auth();
-const db = firebase.firestore();
+  const firebaseConfig = {
+    apiKey: "너_API_KEY",
+    authDomain: "너_AUTH_DOMAIN",
+    projectId: "너_PROJECT_ID",
+    appId: "너_APP_ID"
+  };
 
-/* params */
-const p = new URLSearchParams(location.search);
-const roomId = p.get("room");
-const maxUsers = Number(p.get("max")) || 2;
-const isTemp = p.get("type")==="temp";
-const hashPw = location.hash.slice(1);
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
 
-/* DOM */
-const messages = document.getElementById("messages");
-const input = document.getElementById("input");
-const sendBtn = document.getElementById("sendBtn");
-const typingEl = document.getElementById("typing");
-const countEl = document.getElementById("count");
+  const params = new URLSearchParams(location.search);
+  const room = params.get("room") || "default";
+  const password = params.get("pw") || "1234";
 
-/* password UI */
-const overlay = document.getElementById("pwOverlay");
-const pwInput = document.getElementById("pwInput");
-const pwBtn = document.getElementById("pwBtn");
-const pwError = document.getElementById("pwError");
+  const lock = document.getElementById("lock");
+  const messagesEl = document.getElementById("messages");
+  const input = document.getElementById("input");
 
-let uid, nickname;
-const roomRef = db.collection("rooms").doc(roomId);
+  let uid = null;
 
-/* nickname */
-function askNickname(){
-  const r=/^[가-힣a-zA-Z]{1,10}$/;
-  let n;
-  do{ n=prompt("닉네임 (한/영 10자)"); }while(!r.test(n));
-  localStorage.setItem("nickname",n);
-  return n;
-}
+  auth.signInAnonymously().then(res => {
+    uid = res.user.uid;
+  });
 
-/* password UI logic */
-if(hashPw){
-  const saved = localStorage.getItem("room_pw_"+roomId);
-  if(saved!==hashPw) overlay.classList.remove("hidden");
-}
-pwBtn.onclick = ()=>{
-  if(pwInput.value===hashPw){
-    localStorage.setItem("room_pw_"+roomId,hashPw);
-    overlay.classList.add("hidden");
-  } else {
-    pwError.textContent="암호가 틀렸습니다";
-    pwInput.value="";
+  function unlock() {
+    const v = document.getElementById("pwInput").value;
+    if (v === password) lock.style.display = "none";
+    else alert("암호 틀림");
   }
-};
-pwInput.onkeydown=e=>{ if(e.key==="Enter") pwBtn.click(); };
 
-/* auth */
-auth.signInAnonymously().then(async r=>{
-  uid=r.user.uid;
-  nickname=localStorage.getItem("nickname")||askNickname();
+  function addMsg(text, mine) {
+    const d = document.createElement("div");
+    d.className = "msg " + (mine ? "me" : "you");
+    d.textContent = text;
+    messagesEl.appendChild(d);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
 
-  const ok = await db.runTransaction(async tx=>{
-    const s=await tx.get(roomRef);
-    const m=s.data()?.meta||{};
-    if((m.usersCount||0)>=(m.maxUsers||maxUsers)) return false;
-    tx.set(roomRef,{meta:{
-      ...m,
-      usersCount:(m.usersCount||0)+1,
-      maxUsers:m.maxUsers||maxUsers,
-      temp:isTemp
-    }},{merge:true});
-    return true;
-  });
-
-  if(!ok){ alert("인원 초과"); location.href="index.html"; return; }
-  listen();
-});
-
-/* listeners */
-function listen(){
-  roomRef.collection("messages").orderBy("time").onSnapshot(s=>{
-    messages.innerHTML="";
-    s.forEach(d=>{
-      const m=d.data();
-      const div=document.createElement("div");
-      div.className="msg "+(m.uid===uid?"me":"you");
-      div.textContent=m.text;
-      messages.appendChild(div);
+  db.collection("rooms").doc(room).collection("messages")
+    .orderBy("t")
+    .onSnapshot(snap => {
+      messagesEl.innerHTML = "";
+      snap.forEach(d => {
+        const m = d.data();
+        addMsg(m.text, m.uid === uid);
+      });
     });
-    window.scrollTo(0,document.body.scrollHeight);
-  });
 
-  roomRef.collection("users").onSnapshot(s=>{
-    let t=false;
-    s.forEach(d=>{ if(d.id!==uid && d.data().typing) t=true; });
-    typingEl.textContent=t?"…":"";
-  });
+  function send() {
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    db.collection("rooms").doc(room).collection("messages").add({
+      text,
+      uid,
+      t: Date.now()
+    });
+  }
 
-  roomRef.onSnapshot(d=>{
-    const m=d.data()?.meta;
-    if(!m) return;
-    countEl.textContent=`${m.usersCount} / ${m.maxUsers}`;
-    if(m.temp && m.usersCount<=0) roomRef.delete();
+  document.getElementById("sendBtn").onclick = send;
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") send();
   });
-}
-
-/* send */
-function send(){
-  const text=input.value.trim();
-  if(!text) return;
-  roomRef.collection("messages").add({
-    text, uid,
-    time:firebase.firestore.FieldValue.serverTimestamp()
-  });
-  input.value="";
-}
-sendBtn.onclick=send;
-input.onkeydown=e=>{ if(e.key==="Enter") send(); };
-input.oninput=()=>{
-  roomRef.collection("users").doc(uid)
-    .set({nickname,typing:true},{merge:true});
-  clearTimeout(window._t);
-  window._t=setTimeout(()=>{
-    roomRef.collection("users").doc(uid).update({typing:false});
-  },1000);
-};
-
-/* leave */
-window.addEventListener("beforeunload",()=>{
-  roomRef.collection("users").doc(uid).delete();
-  roomRef.update({
-    "meta.usersCount":firebase.firestore.FieldValue.increment(-1)
-  });
-});
 </script>
 
 </body>
