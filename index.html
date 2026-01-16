@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>WebChat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont;
+}
+header {
+  text-align: center;
+  padding: 28px 0 12px;
+  font-size: 32px;
+  font-weight: 600;
+}
+.section {
+  padding: 20px;
+}
+.small {
+  color: #888;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+label {
+  margin-right: 12px;
+}
+input, select, button {
+  background: #1c1c1e;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 15px;
+}
+button {
+  width: 100%;
+  margin-top: 10px;
+}
+hr {
+  border: 0;
+  border-top: 1px solid #222;
+  margin: 24px 0;
+}
+</style>
+</head>
+
+<body>
+
+<header>WebChat</header>
+
+<div class="section">
+
+  <div class="small">인원</div>
+  <label>
+    <input type="radio" name="count" value="2" checked> 쓰기
+  </label>
+  <label>
+    <input type="radio" name="count" value="nn"> nn
+  </label>
+
+  <select id="nnCount" style="display:none;margin-top:10px">
+    <option value="3">3</option>
+    <option value="4">4</option>
+    <option value="5">5</option>
+    <option value="6">6</option>
+    <option value="7">7</option>
+    <option value="8">8</option>
+    <option value="9">9</option>
+    <option value="10">10</option>
+  </select>
+
+  <hr>
+
+  <button onclick="tempRoom()">임시 대화방 생성</button>
+
+  <hr>
+
+  <input id="pw" placeholder="암호 (한/영)">
+  <button onclick="lockRoom()">암호 대화방 생성</button>
+
+</div>
+
+<script>
+function roomId() {
+  return Math.random().toString(36).slice(2, 8);
+}
+
+document.querySelectorAll("input[name=count]").forEach(r => {
+  r.onchange = () => {
+    nnCount.style.display = r.value === "nn" ? "block" : "none";
+  };
+});
+
+function maxUsers() {
+  const v = document.querySelector("input[name=count]:checked").value;
+  return v === "nn" ? nnCount.value : 2;
+}
+
+function base() {
+  return location.origin + location.pathname.replace("index.html", "");
+}
+
+function tempRoom() {
+  location.href =
+    `${base()}Chat.html?room=${roomId()}&type=temp&max=${maxUsers()}`;
+}
+
+function lockRoom() {
+  if (!pw.value) return alert("암호 입력");
+  location.href =
+    `${base()}Chat.html?room=${roomId()}&max=${maxUsers()}#${encodeURIComponent(pw.value)}`;
+}
+</script>
+
+</body>
+</html>

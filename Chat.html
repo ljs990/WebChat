@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>WebChat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+body {
+  margin:0;
+  background:#000;
+  color:#fff;
+  font-family:-apple-system, BlinkMacSystemFont;
+}
+header {
+  text-align:center;
+  padding:14px 0 6px;
+  font-size:22px;
+  font-weight:600;
+}
+#count {
+  text-align:center;
+  color:#888;
+  font-size:13px;
+  margin-bottom:6px;
+}
+#messages {
+  padding:10px;
+  padding-bottom:90px;
+}
+.msg {
+  max-width:70%;
+  padding:10px 14px;
+  border-radius:18px;
+  margin:6px 0;
+  word-break:break-word;
+}
+.me {
+  margin-left:auto;
+  background:#0A84FF;
+}
+.you {
+  background:#2C2C2E;
+}
+#typing {
+  color:#888;
+  font-size:13px;
+  padding:0 14px;
+}
+footer {
+  position:fixed;
+  bottom:0;
+  width:100%;
+  padding:10px;
+  background:#111;
+}
+input {
+  width:100%;
+  border:none;
+  border-radius:20px;
+  padding:12px;
+  font-size:15px;
+  outline:none;
+}
+</style>
+</head>
+
+<body>
+
+<header>WebChat</header>
+<div id="count"></div>
+<div id="messages"></div>
+<div id="typing"></div>
+
+<footer>
+  <input id="input" placeholder="Message">
+</footer>
+
+
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+/* Firebase 설정 */
+firebase.initializeApp({
+  apiKey: "AIzaSyBONHZ5CmDrvoQ4q8sx_f5g0EiEJGJw_1s",
+  authDomain: "webchat-841e0.firebaseapp.com",
+  projectId: "webchat-841e0",
+  storageBucket: "webchat-841e0.firebasestorage.app",
+  messagingSenderId: "772656579197",
+  appId: "1:772656579197:web:92055fafce079bd6cc6714"
+});
+
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+/* URL 파라미터 */
+const params = new URLSearchParams(location.search);
+const roomId = params.get("room");
+const maxUsers = Number(params.get("max")) || 2;
+const isTemp = params.get("type") === "temp";
+const hashPw = location.hash.replace("#","");
+
+/* DOM */
+const messages = document.getElementById("messages");
+const input = document.getElementById("input");
+const typingEl = document.getElementById("typing");
+const countEl = document.getElementById("count");
+
+let uid, nickname;
+const roomRef = db.collection("rooms").doc(roomId);
+
+/* 유틸 */
+async function sha256(text) {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(text)
+  );
+  return [...new Uint8Array(buf)]
+    .map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+/* 닉네임 */
+function askNickname() {
+  const regex = /^[가-힣a-zA-Z]{1,10}$/;
+  let n;
+  do {
+    n = prompt("닉네임 (한/영 10자)");
+  } while (!regex.test(n));
+  localStorage.setItem("nickname", n);
+  return n;
+}
+
+/* 로그인 & 입장 */
+auth.signInAnonymously().then(async res => {
+  uid = res.user.uid;
+  nickname = localStorage.getItem("nickname") || askNickname();
+
+  // 인원 제한 트랜잭션
+  const ok = await db.runTransaction(async tx => {
+    const snap = await tx.get(roomRef);
+    const meta = snap.data()?.meta || {};
+    if ((meta.usersCount||0) >= (meta.maxUsers||maxUsers)) return false;
+
+    tx.set(roomRef,{
+      meta:{
+        ...meta,
+        usersCount:(meta.usersCount||0)+1,
+        maxUsers:meta.maxUsers||maxUsers,
+        temp:isTemp
+      }
+    },{merge:true});
+    return true;
+  });
+
+  if (!ok) {
+    alert("인원 초과");
+    location.href="index.html";
+    return;
+  }
+
+  // 암호방
+  if (hashPw) {
+    const saved = localStorage.getItem("room:"+roomId);
+    if (!saved) {
+      const doc = await roomRef.get();
+      const meta = doc.data().meta || {};
+      const h = await sha256(hashPw);
+
+      if (!meta.passHash) {
+        await roomRef.set({meta:{...meta,locked:true,passHash:h}},{merge:true});
+      } else if (meta.passHash !== h) {
+        alert("암호 오류");
+        location.href="index.html";
+        return;
+      }
+      localStorage.setItem("room:"+roomId,"ok");
+    }
+  }
+
+  listen();
+});
+
+/* 리스너 */
+function listen() {
+  // 메시지
+  roomRef.collection("messages")
+    .orderBy("time")
+    .onSnapshot(snap=>{
+      messages.innerHTML="";
+      snap.forEach(doc=>{
+        const d=doc.data();
+        const div=document.createElement("div");
+        div.className="msg "+(d.uid===uid?"me":"you");
+        div.textContent=d.text;
+        messages.appendChild(div);
+      });
+      window.scrollTo(0,document.body.scrollHeight);
+    });
+
+  // typing
+  roomRef.collection("users")
+    .onSnapshot(snap=>{
+      let show=false;
+      snap.forEach(d=>{
+        if(d.id!==uid && d.data().typing) show=true;
+      });
+      typingEl.textContent = show ? "…" : "";
+    });
+
+  // 인원 표시 + 임시방 삭제
+  roomRef.onSnapshot(doc=>{
+    const m=doc.data()?.meta;
+    if(!m) return;
+    countEl.textContent = `${m.usersCount} / ${m.maxUsers}`;
+    if(m.temp && m.usersCount<=0) roomRef.delete();
+  });
+}
+
+/* 입력 */
+let timer;
+input.oninput=()=>{
+  roomRef.collection("users").doc(uid)
+    .set({nickname,typing:true},{merge:true});
+
+  clearTimeout(timer);
+  timer=setTimeout(()=>{
+    roomRef.collection("users").doc(uid)
+      .update({typing:false});
+  },1000);
+};
+
+input.onkeydown=e=>{
+  if(e.key==="Enter" && input.value.trim()){
+    roomRef.collection("messages").add({
+      text:input.value,
+      uid,
+      time:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    input.value="";
+  }
+};
+
+/* 퇴장 */
+window.addEventListener("beforeunload",()=>{
+  roomRef.update({
+    "meta.usersCount":
+      firebase.firestore.FieldValue.increment(-1)
+  });
+});
+</script>
+
+</body>
+</html>
